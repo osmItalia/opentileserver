@@ -31,10 +31,14 @@ VHOST=$(hostname -f)
 #sudo sysctl -w vm.drop_caches=3 	#clean unused cache memory
 #C_MEM is the sum of free memory and cached memory
 C_MEM=$(free -m | grep -i 'mem:' | sed 's/[ \t]\+/ /g' | cut -f4,7 -d' ' | tr ' ' '+' | bc)
-MEM_LIMIT=30000 	# limit for osm2pgsql (2016-06)
+echo $C_MEM
+C_MEM=$(($C_MEM * 7 / 10))
+echo $C_MEM
+MEM_LIMIT=28000 	# limit for osm2pgsql (2016-06) 30000
 if [ $C_MEM -gt $MEM_LIMIT ]; then
 	C_MEM=$MEM_LIMIT
 fi
+
 
 NP=$(grep -c 'model name' /proc/cpuinfo)
 osm2pgsql_OPTS="--slim -d ${OSM_DB} -C ${C_MEM} --number-processes ${NP} --hstore"
