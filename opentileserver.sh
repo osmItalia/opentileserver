@@ -1,5 +1,5 @@
 #!/bin/bash -e
-#Version: 0.3.15
+#Version: 0.3.16
 #For use on clean Ubuntu 14 only!!!
 #MapFig, Inc
 #Usage: ./opentileserver.sh [web|ssl] [bright|carto] [pbf_url]"
@@ -14,9 +14,9 @@
 #export LC_ALL=C
 
 
-WEB_MODE="${1}"         #web,ssl
+WEB_MODE="${1}"		#web,ssl
 OSM_STYLE="${2}"	#bright, carto
-PBF_URL="${3}";	#get URL from first parameter, http://download.geofabrik.de/europe/germany-latest.osm.pbf
+PBF_URL="${3}";		#get URL from first parameter, http://download.geofabrik.de/europe/germany-latest.osm.pbf
 OSM_STYLE_XML=''
 
 CND_FOLDER='https://www.mapfig.com/'
@@ -39,6 +39,8 @@ if [ $C_MEM -gt $MEM_LIMIT ]; then
 	C_MEM=$MEM_LIMIT
 fi
 
+# Update with your locale configuration es:"en_US.UTF-8"
+LOCALE="it_IT.UTF-8"
 
 NP=$(grep -c 'model name' /proc/cpuinfo)
 osm2pgsql_OPTS="--slim -d ${OSM_DB} -C ${C_MEM} --number-processes ${NP} --hstore"
@@ -151,34 +153,36 @@ function style_osm_carto(){
 }
 
 function enable_osm_updates(){
+	#1. install osmosis
 	apt-get -y install osmosis
 	if [ $? -ne 0 ]; then	echo "Error: Apt failed ot install osmosis";	exit 1; fi
-
+	
+	#2. create folder .osmosis and configure file configuration.txt
 	export WORKDIR_OSM=/home/${OSM_USER}/.osmosis
-
 	if [ $(grep -c 'WORKDIR_OSM' /etc/environment) -eq 0 ]; then
 		echo 'export WORKDIR_OSM=/home/tile/.osmosis' >> /etc/environment
 		mkdir -p $WORKDIR_OSM
 		osmosis --read-replication-interval-init workingDirectory=${WORKDIR_OSM}
 	fi
 
-	#2. Generating state.txt
+	#3. configure url update
+	UPDATE_URL="$(echo ${PBF_URL} | sed 's/latest.osm.pbf/updates/')"
+
+	#4. generating state.txt
 	if [ ! -f ${WORKDIR_OSM}/state.txt ]; then
-		#NOTE: If you want hourly updates set stream=hourly
-		STATE_URL="http://osm.personalwerk.de/replicate-sequences/?Y=$(date '+%Y')&m=$(date '+%n')&d=$(date '+%d')&H=$(date '+%H')&i=$(date '+%M')&s=$(date '+%S')&stream=day"
-		wget -O${WORKDIR_OSM}/state.txt ${STATE_URL}
+		#NOTE# geofabrik.de update every 24 hours
+		STATE_URL=$UPDATE_URL/state.txt
+        wget -O${WORKDIR_OSM}/state.txt ${STATE_URL}
 		if [ $? -ne 0 ]; then echo "Error: Failed to get Osmosis state.txt"; exit 1; fi
 	fi
 
-	#3. Fix configuration.txt
-	#Get the URL from http://download.geofabrik.de/europe/germany.html
-	#example PBF_URL='http://download.geofabrik.de/europe/germany-latest.osm.pbf'
-	UPDATE_URL="$(echo ${PBF_URL} | sed 's/latest.osm.pbf/updates/')"
+	#5. Fix configuration.txt
 	sed -i.save "s|#\?baseUrl=.*|baseUrl=${UPDATE_URL}|" ${WORKDIR_OSM}/configuration.txt
-
-	#4. Add step 4 to cron, to make it run every day
+	sed -i.save "s|maxInterval =.*|maxInterval = 86400|" ${WORKDIR_OSM}/configuration.txt
+	
+	#6. Add step 4 to cron, to make it run every day
 	if [ ! -f /etc/cron.daily/osm-update.sh ]; then
-		echo >/etc/cron.daily/osm-update.sh <<CMD_EOF
+		cat >/etc/cron.daily/osm-update.sh <<CMD_EOF
 #!/bin/bash
 export WORKDIR_OSM=/home/${OSM_USER}/.osmosis
 export PGPASSWORD="${MAPFIG_PG_PASS}"
@@ -191,7 +195,7 @@ CMD_EOF
 
 #Steps
 #1 Update ATP and isntall needed packages
-locale-gen "it_IT.UTF-8"
+locale-gen $LOCALE
 dpkg-reconfigure locales
 
 apt-get clean
