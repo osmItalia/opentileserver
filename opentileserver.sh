@@ -143,6 +143,8 @@ function style_osm_carto(){
 		./scripts/yaml2mml.py < project.yaml > project.mml
 	fi
 	carto project.mml > osm-carto.xml
+	
+	psql -d gis -f indexes.sql
 
 	osm2pgsql_OPTS+=' --style /usr/local/share/maps/style/openstreetmap-carto-master/openstreetmap-carto.style'
 	OSM_STYLE_XML='/usr/local/share/maps/style/openstreetmap-carto-master/osm-carto.xml'
